@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = 
 library(tidyverse)
 library(naniar)
 library(UpSetR)
+library(betareg)
 
 # wildlife strikes, passwords, freedom, indoor pollution, layoffs (kaggle), company reputations
 
@@ -24,58 +25,88 @@ library(UpSetR)
 ```
 
 ```{r}
-coast_vs_waste <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/coastal-population-vs-mismanaged-plastic.csv")
+coast_vs_waste <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/coastal-population-vs-mismanaged-plastic.csv") %>%
+  select(-`Mismanaged plastic waste (tonnes)`) %>%
+  filter(Year == '2010') %>%
+  filter(Entity != "World")
 
-mismanaged_vs_gdp <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/per-capita-mismanaged-plastic-waste-vs-gdp-per-capita.csv")
+mismanaged_vs_gdp <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/per-capita-mismanaged-plastic-waste-vs-gdp-per-capita.csv") %>%
+  filter(Year == '2010')
 
 waste_vs_gdp <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/per-capita-plastic-waste-vs-gdp-per-capita.csv") %>%
-  select(Entity, Code, Year, `Per capita plastic waste (kilograms per person per day)`, `Total population (Gapminder)`)
+  select(Entity, Code, Year, `Per capita plastic waste (kilograms per person per day)`, `Total population (Gapminder)`) %>%
+  filter(Year == '2010')
+
+exclude <- c("Arab World", "Caribbean small states", "Central Europe and the Baltics", "Early-demographic dividend", "East Asia & Pacific", "East Asia & Pacific (IDA & IBRD)", "East Asia & Pacific (excluding high income)", "Europe and Central Asia", "Europe and Central Asia (IDA & IBRD)", "Europe and Central Asia (excluding high income)", "European Union", "Fragile and conflict affected situations", "Heavily indebted poor countries (IPC)", "High income", "IBRD only", "IDA and IBRD total", "IDA blend", "IDA only", "IDA total", "Late-demographic dividend", "Latin America & Caribbean", "Latin America & Caribbean (IDA & IBRD)", "Latin America & Caribbean (excluding high income)", "Least developed countries: UN classification", "Low & middle income", "Low income", "Lower middle income", "Middle East & North Africa", "Middle East & North Africa (IDA & IBRD)", "Middle East & North Africa (excluding high income)", "Middle income", "OECD members", "Other small states", "Pacific island small states", "Post-demographic dividend", "Pre-demographic dividend", "Small states", "South Asia", "South Asia (IDA & IBRD)", "Sub-Saharan Africa", "Sub-Saharan Africa (IDA & IBRD)", "Sub-Saharan Africa (excluding high income)", "Upper middle income", "World", "Euro area", "Europe & Central Asia", "Europe & Central Asia (IDA & IBRD)", "Europe & Central Asia (excluding high income)", "Heavily indebted poor countries (HIPC)", "IDA & IBRD total", "North America", "Kosovo", "Timor") # Kosovo, Timor (island; East Timor - sovereign, West Timor part of Indonesia) excluded for lack of population data
 
 plastic <- left_join(mismanaged_vs_gdp, waste_vs_gdp, by = c('Entity', 'Code', 'Year', 'Total population (Gapminder)')) %>%
+  filter(!(Entity %in% exclude))
+
+plastic <- plastic %>%
+  mutate(`Coastal Population` = coast_vs_waste$`Coastal population`) %>%
   rename("Country" = "Entity",
-         "Population" = "Total population (Gapminder)",
+         "Total Population" = "Total population (Gapminder)",
          "Per Capita GDP" = "GDP per capita, PPP (constant 2011 international $) (Rate)",
          "Per Capita Mismanaged Waste (Per Day)" = "Per capita mismanaged plastic waste (kilograms per person per day)",
          "Per Capita Waste (Per Day)" = "Per capita plastic waste (kilograms per person per day)") %>%
-  filter(Year == '2010') %>%
   select(-Code)
 ```
+
+8 pages strict
+
+- logit link
+- Y ~ Beta(Alpha, Beta)
+- logit(E(Y|X)) = X' beta
+- log(Alpha / Beta) = X' beta
+- Y = ratio of mismanaged to total plastic waste
+- no error term
+
+- interpretations: linear predictor of logit of conditional expectation
+- why use logit link? - interpretability
+- interactions
+
+- assumptions for beta regression? - independence (only 2010), linearity of predictors
+
+- motivation for this analysis = supranational organizations, like the UN, would like to know how per capita GDP is associated with the country's ratio of mismanaged (define this!) to total plastic waste (pollution) - good!
 
 ```{r}
 vis_miss(plastic, warn_large_data = F)
 gg_miss_upset(plastic)
 ```
 
-# conduct a complete case analysis
-- response variable is created from mismanaged and total waste
-- per capita GDP is the covariate of interest
-- control for population
+# conduct a complete case analysis (first exclude non-countries, then exclude countries without full information)
+- response variable is created from mismanaged and total plastic waste
+- per capita GDP (based on 2011 international rates) and proportion of country's coastal population to total population (reported by Gapminder) are covariates of interest
 
--> exclude countries without full information
 -> only consider 2010 since that's when plastic waste data is available
--> GDP (based on 2011 international rates)
+-> create response variable: Per Capita Mismanaged Waste (Per Day) / Per Capita Waste (Per Day)
+-> create second covariate: Coastal Population / Total Population
 
--> create response variable: quotient of Per Capita Mismanaged Waste (Per Day) / Per Capita Waste (Per Day)
+-> tried to manually adjust total population for countries whose coastal population > total population, but found that the issue persisted for some countries
+- issues with data collection of coastal population (how is it collected?)
 
 ```{r}
 plastic2 <- plastic %>%
-  na.omit() %>%
-  select(Country, Population, `Per Capita GDP`, `Per Capita Mismanaged Waste (Per Day)`, `Per Capita Waste (Per Day)`) %>%
-  mutate(`Mismanaged Waste Rate` = `Per Capita Mismanaged Waste (Per Day)` / `Per Capita Waste (Per Day)`)
+  filter(!is.na(`Total Population`)) %>% # 11 excluded
+  filter(!is.na(`Per Capita GDP`)) %>% # 38 excluded
+  filter(!is.na(`Per Capita Mismanaged Waste (Per Day)`) & !is.na(`Per Capita Waste (Per Day)`)) %>% # 40 excluded
+  mutate(`Mismanaged Waste Proportion` = `Per Capita Mismanaged Waste (Per Day)` / `Per Capita Waste (Per Day)`) %>%
+  mutate(`Coastal Population Proportion` = ifelse(`Coastal Population` / `Total Population` < 1, `Coastal Population` / `Total Population`, 1)) %>% # when coastal population > total population, we consider the entire population to be coastal (islands)
+  select(Country, `Per Capita GDP`, `Coastal Population Proportion`, `Mismanaged Waste Proportion`)
 ```
 
 
-Research Question: How is a country's per capita GDP associated with its rate of mismanaged plastic waste?
+Research Questions: 
 
-response variable: rate
-beta regression?
+How is a country's per capita GDP associated with its proportion of mismanaged plastic waste?
+
+How is a country's coastal population proportion associated with its proportion of mismanaged plastic waste?
+
+response variable: between [0, 1]
+beta regression! - not a GLM
 
 ```{r}
-library(betareg)
-m1 <- betareg(`Mismanaged Waste Rate` ~ `Per Capita GDP` + Population, data = plastic2)
+m1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
 
 summary(m1)
 ```
-
-
-
