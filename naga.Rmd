@@ -98,9 +98,11 @@ plastic2 <- plastic %>%
 
 Research Questions: 
 
+https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-05-21
+
 How is a country's per capita GDP associated with its proportion of mismanaged plastic waste?
 
-How is a country's coastal population proportion associated with its proportion of mismanaged plastic waste?
+How is a country's coastal population proportion (Number of individuals living on/near coast / total population) associated with its proportion of mismanaged plastic waste?
 
 response variable: between [0, 1]
 beta regression! - not a GLM
@@ -110,3 +112,25 @@ m1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP` + `Coastal Popula
 
 summary(m1)
 ```
+
+### Introduction
+
+#### Background
+
+#### Exploratory Data Analysis
+
+#### Research Questions
+
+#### Hypotheses
+
+### Methodology
+
+### Results
+
+### Discussion
+
+#### Conclusions
+
+#### Limitations
+
+### Appendix
