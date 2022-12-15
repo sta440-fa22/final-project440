@@ -10,12 +10,15 @@ header-includes:
 - \floatplacement{figure}{H}
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
+```{r setup, include = FALSE}
 library(tidyverse)
 library(naniar)
 library(UpSetR)
 library(betareg)
+library(janitor)
+library(broom)
+library(knitr)
+opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
 ```
 
 ```{r}
@@ -58,22 +61,14 @@ plastic2 <- plastic %>%
   filter(!is.na(`Per Capita Mismanaged Waste (Per Day)`) & !is.na(`Per Capita Waste (Per Day)`)) %>% # 40 excluded
   mutate(`Mismanaged Waste Proportion` = `Per Capita Mismanaged Waste (Per Day)` / `Per Capita Waste (Per Day)`) %>%
   mutate(`Coastal Population Proportion` = ifelse(`Coastal Population` / `Total Population` < 1, `Coastal Population` / `Total Population`, 1)) %>% # when coastal population > total population, we consider the entire population to be coastal (islands)
-  select(Country, `Per Capita GDP`, `Coastal Population Proportion`, `Mismanaged Waste Proportion`)
-```
-
-```{r}
-m1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
-
-summary(m1)
+  select(Country, `Per Capita GDP`, `Coastal Population Proportion`, `Coastal Population`, `Total Population`, `Mismanaged Waste Proportion`)
 ```
 
 # Introduction
 
 ## Background Information
 
-https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-05-21
-
-- motivation for this analysis = supranational organizations, like the UN, would like to know how per capita GDP is associated with the country's ratio of mismanaged (define this!) to total plastic waste (pollution) - good!
+Plastic pollution is a severe and growing problem in the world, adversely affecting ecosystems and wildlife. According to Geyer and collaborators (2017), the world produced only two million tonnes of plastic. Since then, annual global plastic production has increased roughly 150-fold, reaching 313 million tonnes in 2010 (this upward trend has continued: approximately 460 million tonnes in 2019; Ritchie & Roser, 2018). Naturally, as plastic production has amplified across several decades, plastic waste generation has also increased. Increased plastic waste, by itself, is not the primary issue. The problem is that many (particularly, low-to-middle income) countries continue to rely on inefficient waste management systems which cannot cope with increasing waste generation (Ritchie & Roser, 2018). This has contributed to an increase in the amount of mismanaged plastic waste--plastic that is either inadequately disposed (stored in open or insecure landfills; high risk of polluting rivers and oceans) or littered by coastal populations (populations living within 50 kilometers of a coastline)--generated globally (Ritchie & Roser, 2018). Coastal populations are critical because their plastic waste is at a higher risk of leading to ocean debris (compared to sources further inland), but “mismanaged waste could eventually enter the ocean via inland waterways, wastewater outflows, and transport by wind or tides” (Ritchie & Roser, 2018). 
 
 ## Research Aims
 
@@ -86,6 +81,38 @@ How is a country's coastal population proportion (Number of individuals living o
 ## Hypotheses
 
 ## Exploratory Data Analysis
+
+```{r}
+ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP`, y = `Mismanaged Waste Proportion`)) +
+  geom_point()
+
+ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP`, y = log(`Mismanaged Waste Proportion`))) +
+  geom_point() # negative trend after log-transformation
+
+ggplot(data = plastic2, mapping = aes(x = `Coastal Population`, y = `Mismanaged Waste Proportion`)) +
+  geom_point()
+
+ggplot(data = plastic2, mapping = aes(x = `Total Population`, y = `Mismanaged Waste Proportion`)) +
+  geom_point()
+
+ggplot(data = plastic2, mapping = aes(x = `Coastal Population Proportion`, y = `Mismanaged Waste Proportion`)) +
+  geom_point() # no relationship
+```
+
+```{r}
+bm1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP`, data = plastic2)
+
+bm2 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
+
+lm1 <- lm(log(`Mismanaged Waste Proportion`) ~ `Per Capita GDP`, data = plastic2)
+
+lm2 <- lm(log(`Mismanaged Waste Proportion`) ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
+
+summary(bm1)
+summary(bm2)
+summary(lm1)
+summary(lm2)
+```
 
 # Methodology
 
@@ -116,7 +143,41 @@ beta regression! - not a GLM
 
 - assumptions for beta regression? - independence (only 2010 -> satisfied), linearity of predictors
 
+Using mathematical notation, we can express our final model as
+
+```{=tex}
+\begin{align*}
+\log(T_i) &= \beta_0 + \beta_1 x_{1i} + \beta_2 x_{2i} + \beta_3 x_{3i} +  \beta_4 x_{4i} + \beta_5 x_{5i} + \beta_6 x_{6i}  + \beta_7 x_{7i} + \beta_8 x_{8i} + \ldots + \beta_{30} x_{30i} + \epsilon_i
+\end{align*}
+```
+
+where $i$ is the index for the patient (ranging from 1 to 21,180), $T_i$ is the predicted survival time of $i$th patient with a history of smoking. In terms of the covariates, $x_{1i}$ through $x_{3i}$ indicate the $i$th patient’s body mass index category, $x_{4i}$ through $x_{7i}$ indicate the $i$th patient’s congestive heart failure severity, and $x_{8i}$ through $x_{30i}$ are the controlled patient demographic and medical factors.
+
 # Results
+
+The regression coefficients were estimated using the `betareg()` function in R. Table 2 displays the coefficient estimates, as well as the corresponding 95% confidence intervals and p-values for the final model.
+
+
+```{r include = T}
+final_output <- clean_names(as.data.frame(summary(bm2)[["coefficients"]][["mean"]])) %>%
+  mutate(conf_int_lower = (estimate - (1.96*std_error)),
+         conf_int_upper = (estimate + (1.96*std_error))) %>%
+  select(estimate, conf_int_lower, conf_int_upper, pr_z) %>%
+  mutate(p = if_else(pr_z < 0.01, 0.00, pr_z),
+         p = ceiling(p * 10000) / 10000,
+         p = as.character(p),
+         p = if_else(p == "0", "<0.01", p)) %>%
+  rename("Coefficient" = estimate,
+         "Lower Bound" = conf_int_lower,
+         "Upper Bound" = conf_int_upper,
+         "P-Value" = p) %>%
+  select(-pr_z)
+
+final_output %>%
+  kable(digits = 3, caption = "Final Model Coefficients and 95% Confidence Intervals")
+```
+
+Holding the proportion of a country's total population that lives within 50 kilometers of a coastline constant:
 
 # Discussion
 
@@ -127,3 +188,13 @@ beta regression! - not a GLM
 ## Summary
 
 # Appendices
+
+# References
+
+1) Geyer et al., 2017: Production, use, and fate of all plastics ever made | Science Advances
+
+2) Hannah Ritchie and Max Roser (2018) - "Plastic Pollution". Published online at OurWorldInData.org. Retrieved from: 'https://ourworldindata.org/plastic-pollution' [Online Resource]
+
+
+https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-05-21
+
