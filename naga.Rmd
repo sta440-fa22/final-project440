@@ -1,5 +1,5 @@
 ---
-title: "The Associations Between Mismanaged Plastic Waste and Per Capita GDP and Coastal Populations"
+title: "Understanding the Associations Between Mismanaged Plastic Waste and Purchasing Power Parity Per Capita GDP and Coastal Populations"
 author: "Nagaprasad Rudrapatna"
 date: "December 16, 2022"
 output:
@@ -11,32 +11,62 @@ header-includes:
 ---
 
 ```{r setup, include = FALSE}
-library(tidyverse)
 library(naniar)
 library(UpSetR)
 library(betareg)
 library(janitor)
 library(broom)
 library(knitr)
+library(tidyverse)
+library(gamlss)
+
 opts_chunk$set(echo = FALSE, include = FALSE, warning = FALSE, message = FALSE)
 ```
 
 ```{r}
-coast_vs_waste <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/coastal-population-vs-mismanaged-plastic.csv") %>%
-  select(-`Mismanaged plastic waste (tonnes)`) %>%
-  filter(Year == '2010') %>%
-  filter(Entity != "World")
-
 mismanaged_vs_gdp <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/per-capita-mismanaged-plastic-waste-vs-gdp-per-capita.csv") %>%
-  filter(Year == '2010')
+  filter(Year == '2010') %>%
+  filter(!is.na(`Per capita mismanaged plastic waste (kilograms per person per day)`)) %>%
+  dplyr::select(-Year)
 
 waste_vs_gdp <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/per-capita-plastic-waste-vs-gdp-per-capita.csv") %>%
-  select(Entity, Code, Year, `Per capita plastic waste (kilograms per person per day)`, `Total population (Gapminder)`) %>%
-  filter(Year == '2010')
+  filter(Year == '2010') %>%
+  filter(!is.na(`Per capita plastic waste (kilograms per person per day)`)) %>%
+  dplyr::select(-Year, -`GDP per capita, PPP (constant 2011 international $) (constant 2011 international $)`) 
 
-exclude <- c("Arab World", "Caribbean small states", "Central Europe and the Baltics", "Early-demographic dividend", "East Asia & Pacific", "East Asia & Pacific (IDA & IBRD)", "East Asia & Pacific (excluding high income)", "Europe and Central Asia", "Europe and Central Asia (IDA & IBRD)", "Europe and Central Asia (excluding high income)", "European Union", "Fragile and conflict affected situations", "Heavily indebted poor countries (IPC)", "High income", "IBRD only", "IDA and IBRD total", "IDA blend", "IDA only", "IDA total", "Late-demographic dividend", "Latin America & Caribbean", "Latin America & Caribbean (IDA & IBRD)", "Latin America & Caribbean (excluding high income)", "Least developed countries: UN classification", "Low & middle income", "Low income", "Lower middle income", "Middle East & North Africa", "Middle East & North Africa (IDA & IBRD)", "Middle East & North Africa (excluding high income)", "Middle income", "OECD members", "Other small states", "Pacific island small states", "Post-demographic dividend", "Pre-demographic dividend", "Small states", "South Asia", "South Asia (IDA & IBRD)", "Sub-Saharan Africa", "Sub-Saharan Africa (IDA & IBRD)", "Sub-Saharan Africa (excluding high income)", "Upper middle income", "World", "Euro area", "Europe & Central Asia", "Europe & Central Asia (IDA & IBRD)", "Europe & Central Asia (excluding high income)", "Heavily indebted poor countries (HIPC)", "IDA & IBRD total", "North America", "Kosovo", "Timor")
+# exclude <- c("Arab World", "Caribbean small states", "Central Europe and the Baltics", "Early-demographic dividend", "East Asia & Pacific", "East Asia & Pacific (IDA & IBRD)", "East Asia & Pacific (excluding high income)", "Europe and Central Asia", "Europe and Central Asia (IDA & IBRD)", "Europe and Central Asia (excluding high income)", "European Union", "Fragile and conflict affected situations", "Heavily indebted poor countries (IPC)", "High income", "IBRD only", "IDA and IBRD total", "IDA blend", "IDA only", "IDA total", "Late-demographic dividend", "Latin America & Caribbean", "Latin America & Caribbean (IDA & IBRD)", "Latin America & Caribbean (excluding high income)", "Least developed countries: UN classification", "Low & middle income", "Low income", "Lower middle income", "Middle East & North Africa", "Middle East & North Africa (IDA & IBRD)", "Middle East & North Africa (excluding high income)", "Middle income", "OECD members", "Other small states", "Pacific island small states", "Post-demographic dividend", "Pre-demographic dividend", "Small states", "South Asia", "South Asia (IDA & IBRD)", "Sub-Saharan Africa", "Sub-Saharan Africa (IDA & IBRD)", "Sub-Saharan Africa (excluding high income)", "Upper middle income", "World", "Euro area", "Europe & Central Asia", "Europe & Central Asia (IDA & IBRD)", "Europe & Central Asia (excluding high income)", "Heavily indebted poor countries (HIPC)", "IDA & IBRD total", "North America", "Kosovo", "Timor")
 
-plastic <- left_join(mismanaged_vs_gdp, waste_vs_gdp, by = c('Entity', 'Code', 'Year', 'Total population (Gapminder)')) %>%
+exclude <- c("Anguilla", "British Virgin Islands", "Channel Islands", "Christmas Island", "Cocos Islands", "Cuba", "Faeroe Islands", "Falkland Islands", "French Guiana", "French Polynesia", "Gibraltar", "Greenland", "Guadeloupe", "Guam", "Guernsey", "Martinique", "Monaco", "Montserrat", "Netherlands Antilles", "New Caledonia", "Niue", "Norfolk Island", "North Korea", "Northern Mariana Islands", "Reunion", "Saint Helena", "Saint Pierre and Miquelon", "Somalia", "Syria", "Taiwan", "Tokelau", "Turks and Caicos Islands", "Cook Islands")
+
+plastic <- left_join(mismanaged_vs_gdp, waste_vs_gdp, by = c('Entity', 'Code', 'Total population (Gapminder)')) %>%
+  filter(!(Entity %in% exclude))
+
+# imputing GDP 
+
+plastic$`GDP per capita, PPP (constant 2011 international $) (Rate)`[plastic$Entity == "Aruba"] = 33201.304799967
+
+plastic$`GDP per capita, PPP (constant 2011 international $) (Rate)`[plastic$Entity == "Cayman Islands"] = 66882.505944083	
+
+plastic$`GDP per capita, PPP (constant 2011 international $) (Rate)`[plastic$Entity == "Curacao"] = 27527.4888538332
+
+plastic$`GDP per capita, PPP (constant 2011 international $) (Rate)`[plastic$Entity == "Djibouti"] = 3431.22334639906
+
+plastic$`GDP per capita, PPP (constant 2011 international $) (Rate)`[plastic$Entity == "Sint Maarten (Dutch part)"] = 43543.8904230699
+
+# imputing total population
+
+plastic$`Total population (Gapminder)`[plastic$Entity == "Curacao"] = 149188
+
+plastic$`Total population (Gapminder)`[plastic$Entity == "Micronesia (country)"] = 102915
+
+plastic$`Total population (Gapminder)`[plastic$Entity == "Palestine"] =  4055631
+
+plastic$`Total population (Gapminder)`[plastic$Entity == "Sint Maarten (Dutch part)"] = 	34168
+
+plastic$`Total population (Gapminder)`[plastic$Entity == "Yemen"] = 24743946
+
+coast_vs_waste <- read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-05-21/coastal-population-vs-mismanaged-plastic.csv") %>%
+  filter(!is.na(`Coastal population`)) %>% # all countries missing waste generation information are also missing coastal population information
   filter(!(Entity %in% exclude))
 
 plastic <- plastic %>%
@@ -46,22 +76,15 @@ plastic <- plastic %>%
          "Per Capita GDP" = "GDP per capita, PPP (constant 2011 international $) (Rate)",
          "Per Capita Mismanaged Waste (Per Day)" = "Per capita mismanaged plastic waste (kilograms per person per day)",
          "Per Capita Waste (Per Day)" = "Per capita plastic waste (kilograms per person per day)") %>%
-  select(-Code)
-```
-
-```{r}
-vis_miss(plastic, warn_large_data = F)
-gg_miss_upset(plastic)
+  dplyr::select(-Code)
 ```
 
 ```{r}
 plastic2 <- plastic %>%
-  filter(!is.na(`Total Population`)) %>% # 11 excluded
-  filter(!is.na(`Per Capita GDP`)) %>% # 38 excluded
-  filter(!is.na(`Per Capita Mismanaged Waste (Per Day)`) & !is.na(`Per Capita Waste (Per Day)`)) %>% # 40 excluded
   mutate(`Mismanaged Waste Proportion` = `Per Capita Mismanaged Waste (Per Day)` / `Per Capita Waste (Per Day)`) %>%
-  mutate(`Coastal Population Proportion` = ifelse(`Coastal Population` / `Total Population` < 1, `Coastal Population` / `Total Population`, 1)) %>% # when coastal population > total population, we consider the entire population to be coastal (islands)
-  select(Country, `Per Capita GDP`, `Coastal Population Proportion`, `Coastal Population`, `Total Population`, `Mismanaged Waste Proportion`)
+  mutate(`Coastal Population Proportion` = ifelse(`Coastal Population` / `Total Population` < 1, `Coastal Population` / `Total Population`, 1)) %>% # when coastal population > total population, we consider the entire population to be coastal (islands) -> every point in a country might be less than 50 km from a coastline
+  mutate(`Per Capita GDP (in thousands)` = `Per Capita GDP` / 1000) %>%
+  dplyr::select(Country, `Per Capita GDP`, `Per Capita GDP (in thousands)`, `Coastal Population Proportion`, `Coastal Population`, `Total Population`, `Mismanaged Waste Proportion`)
 ```
 
 # Introduction
@@ -74,50 +97,51 @@ Plastic pollution is a severe and growing issue, adversely affecting ecosystems 
 According to Geyer and collaborators (2017), the world produced only two million tonnes of plastic in 1950. Since then, annual global plastic production has increased roughly 150-fold, reaching 313 million tonnes in 2010 (this upward trend has continued since 2010: approximately 460 million tonnes in 2019; Ritchie & Roser, 2018). Naturally, as plastic production has amplified across several decades, the amount of generated plastic waste has also increased. Increased plastic waste, by itself, is not the primary issue. The main problem is rooted in the prevalence of poor waste management infrastructure in low-to-middle income countries (Ritchie & Roser, 2018). This has contributed to an increase in the amount of mismanaged plastic waste--plastic that is either inadequately disposed (stored in open or insecure landfills; high risk of polluting rivers and the ocean) or littered by coastal populations (defined as populations living within 50 kilometers of a coastline)--generated globally (Ritchie & Roser, 2018).  Plastic pollution in the ocean originates from both land-based and marine (“pollution caused by fishing fleets that leave behind fishing nets, lines, ropes, and sometimes abandoned vessels”) sources; the latest estimates indicate that roughly 80% of ocean plastics originate from land-based sources while the remaining 20% stems from marine sources (Li, Tse, & Fok, 2016). The activities of coastal populations are critical since the plastic waste generated by these groups is at a higher risk of leading to ocean debris (compared to sources further inland), but mismanaged waste can “eventually enter the ocean via inland waterways, wastewater outflows, and transport by wind or tides” (Ritchie & Roser, 2018). Previous research has shown that not all mismanaged plastic waste has the same probability of reaching the ocean. These studies have identified an area’s climate, terrain, land use, and proximity to river basins as key factors in determining the probability that mismanaged waste is emitted to the ocean (Ritchie & Roser, 2018).
 
 
-It is important to emphasize that plastic waste can only enter rivers and the ocean if it is improperly managed. In fact, the vast majority of plastic waste ends up in landfills; approximately 3% of global plastic waste enters the ocean (Jambeck et al., 2015). Almost all plastic waste is “incinerated, recycled, or sent it to well-managed landfills” in wealthy countries, but “waste can be dumped outside of landfills (and the landfills that do exist are often open) in poorer countries, leaking waste to the surrounding environment” (Ritchie & Roser, 2018). Prior studies have suggested an association between the wealth of a country and its waste management infrastructure. A statistically rigorous analysis of this relationship, namely how a country’s wealth is associated with its mismanaged plastic waste (particularly, the proportion of total plastic waste that is mismanaged), could be useful for stakeholders (perhaps supranational organizations, such as the European Union or World Bank, who are interested in mitigating the effects of plastic pollution).
+It is important to emphasize that plastic waste can only enter rivers and the ocean if it is improperly managed. In fact, the vast majority of plastic waste ends up in landfills; approximately 3% of global plastic waste enters the ocean (Jambeck et al., 2015). Almost all plastic waste is “incinerated, recycled, or sent it to well-managed landfills” in wealthy countries, but “waste can be dumped outside of landfills (and the landfills that do exist are often open) in poorer countries, leaking waste to the surrounding environment” (Ritchie & Roser, 2018). Prior studies have suggested an association between the wealth of a country and its waste management infrastructure. A statistically rigorous analysis of this relationship, namely how a country’s wealth is associated with its mismanaged plastic waste (particularly, the proportion of plastic waste that is mismanaged), could be useful for stakeholders (perhaps supranational organizations, such as the European Union or World Bank, who are interested in mitigating the effects of plastic pollution).
 
 
 
 ## Research Aims
 
-A common measure of a country’s wealth is its gross domestic product (GDP), which is a comprehensive measure of the country’s economy and growth (in this analysis, GDP is calculated without making deductions for the depreciation of fabricated assets or for the depletion and degradation of natural resources). GDP per capita is GDP converted to international dollars (an international dollar has the same purchasing power over GDP as a US dollar has in the United States) using purchasing power parity (PPP) rates and divided by a country’s total population. In this analysis, PPP GDP per capita is considered in constant 2011 international dollars (Mock, 2019). This project, first and foremost, aims to address the following research question: how is a country's PPP GDP per capita associated with its proportion of mismanaged plastic waste (out of its total plastic waste)? The literature also suggests that waste generated by coastal populations is at a higher risk of entering the ocean. This project therefore seeks to also identify the association (if any) between the relative size of a country’s coastal population (the ratio of the coastal population to the total population) and its proportion of mismanaged plastic waste.
+A common measure of the wealth of an entity (e.g., independent country, larger political unit, overseas territory) is its gross domestic product (GDP), which is a comprehensive measure of the entity’s economy and growth (in this analysis, GDP is calculated without making deductions for the depreciation of fabricated assets or for the depletion and degradation of natural resources). GDP per capita is GDP converted to international dollars (an international dollar has the same purchasing power over GDP as a US dollar has in the United States) using purchasing power parity (PPP) rates and divided by an entity’s total population. In this analysis, PPP GDP per capita is considered in constant 2011 international dollars (Mock, 2019). This project, first and foremost, aims to address the following research question: how is an entity's PPP GDP per capita associated with its proportion of mismanaged plastic waste (out of its total plastic waste)? This project also seeks to identify the association (if any) between the relative size of an entity’s coastal population (the ratio of the coastal population to the total population) and its proportion of mismanaged plastic waste.
 
 
-## Data Description and Key Variables
+## Data Description and Cleaning
 
-- give units for variables
-
-
-Variable description
-
-Daily plastic waste generation per person, measured in kilograms per
-person per day (used to create response). This measures the overall per capita plastic waste generation rate prior to waste management, recycling or incineration. It does not therefore directly indicate the risk of pollution to waterways or marine
-Environments.
+This report relies on the information derived from three datasets. The main datasets provided 2010 daily plastic waste generation (prior to waste management, recycling, or incineration) and daily mismanaged plastic waste generation per capita rates (both measured in kilograms per person per day) for 186 entities, PPP GDP per capita (in constant 2011 international dollars) rates for 236 entities (with observations corresponding to the previous 186), and total population data (reported by the independent Swedish foundation, Gapminder) for 223 entities (with observations corresponding to the previous 186). The PPP GDP per capita rates and population data stretched over 300 years for some entities (the data points for each entity start at different times and the entries are not uniformly spaced; the longest period is from 1700 to 2017). An auxiliary dataset provided 2010 coastal population data for the 186 entities. 
 
 
-The original dataset for this report described adult patients who received cardiac catheterization procedures at the Duke University Hospital between 1985 and 2013. Cardiac catheterization is a medical procedure that involves inserting a thin tube into the patient’s heart for either interventional or diagnostic purposes. This raw dataset included exactly one record per procedure, for a total of 83,320 procedures and 39,098 patients. Out of these patients, 21,492 are categorized as smokers, which is our target for our analysis.
+In this analysis, the response variable is the proportion of plastic waste that was mismanaged by an entity in the year 2010. It is calculated as the ratio of the daily mismanaged plastic waste generation per capita rate to the daily (total) plastic waste generation per capita rate. The covariates of interest are: an entity's 2010 PPP GDP per capita rate and the relative size of an entity’s coastal population (calculated as the ratio of the coastal population to the total population; referred to as an entity's coastal population proportion). These two explanatory variables were selected after careful review of the existing literature on global plastic pollution. Specifically, previous research suggests an association between an entity's wealth and its plastic waste management infrastructure. Furthermore, studies claim that plastic waste generated by coastal populations is at a higher risk of entering the ocean (being mismanaged).
+
 
 ## Hypotheses
 
-Hypothesis
+Hypothesis - based on literature, not EDA! 
 Therefore, there is much more mismanaged plastic waste in poorer countries than in their wealthier counterparts. 
+
+as coastal population proportion rises, mismanaged plastic waste proportion rises
 
 
 ## Exploratory Data Analysis
 
 ```{r include = T, fig.width = 4.5, fig.height = 3, fig.cap = "The Relationship Between PPP GDP Per Capita and Mismanaged Plastic Waste Proportion"}
-ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP`, y = `Mismanaged Waste Proportion`)) +
+ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP (in thousands)`, y = `Mismanaged Waste Proportion`)) +
   geom_point() +
-  labs(x = "PPP GDP Per Capita", y = "Proportion of Mismanaged Plastic Waste", title = "Response vs. PPP GDP Per Capita")
+  labs(x = "PPP GDP Per Capita (in thousands)", y = "Proportion of Mismanaged Plastic Waste", title = "Response vs. PPP GDP Per Capita")
 ```
 
-```{r include = T, fig.width = 4.5, fig.height = 3, fig.cap = "The Relationship Between PPP GDP Per Capita and Mismanaged Plastic Waste Proportion (after log-transformation)"}
-ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP`, y = log(`Mismanaged Waste Proportion`))) +
-  geom_point() + # negative trend after log-transformation 
-  labs(x = "PPP GDP Per Capita", y = "Log(Proportion of Mismanaged Plastic Waste)", title = "Log(Response) vs. PPP GDP Per Capita")
+```{r include = T, fig.width = 4.5, fig.height = 3, fig.cap = "The Relationship Between PPP GDP Per Capita (in thousands) and Mismanaged Plastic Waste Proportion (after log-transformation)"}
+ggplot(data = plastic2, mapping = aes(x = log(`Per Capita GDP (in thousands)`), y = `Mismanaged Waste Proportion`)) +
+  geom_point() +  
+  labs(x = "Log(PPP GDP Per Capita)", y = "Proportion of Mismanaged Plastic Waste", title = "Response vs. PPP GDP Per Capita")
 ```
+
+# log-transform per capita GDP -> varying orders of magnitude
+# mixture model - discrete mass near zero and then continuous mass elsewhere - would be more -> try zero-inflated beta regression?
+
 
 ```{r}
+# don't include
 ggplot(data = plastic2, mapping = aes(x = `Coastal Population`, y = `Mismanaged Waste Proportion`)) +
   geom_point()
 
@@ -133,7 +157,7 @@ ggplot(data = plastic2, mapping = aes(x = `Coastal Population Proportion`, y = `
 plastic2 %>%
   arrange(desc(`Mismanaged Waste Proportion`)) %>%
   slice(1:5) %>%
-  select(Country, `Mismanaged Waste Proportion`)
+  dplyr::select(Country, `Mismanaged Waste Proportion`)
 ```
 
 
@@ -141,11 +165,18 @@ strong regional dominance in global mismanaged coastal waste in Asia (especially
 
 # Methodology
 
+## Data Cleaning
+
+It is important to reiterate that the main datasets included complete information regarding plastic waste generation for these 186 entities. The raw datasets actually included several additional observations with this information missing. For the most part, the entities which did not have this information correspond to landlocked areas. This is reasonable since plastic waste is only classified as having been mismanaged if it enters a body of water. I therefore decided to exclude all entities without 2010 daily plastic waste generation and daily mismanaged plastic waste generation per capita rates (leaving the 186 entities). The primary motivating factor was that the response variable of interest, the proportion of plastic waste that was mismanaged in 2010, depends on the entity's waste generation per capita rates. Moreover, as coastal population data and daily (mismanaged) plastic waste generation per capita rates were only available in 2010, I decided to limit the analysis to this year. This means that, despite the availability of PPP GDP per capita rates in other years, I only consider 2010 PPP GDP per capita rates for each entity. Unfortunately, 41 entities were missing either PPP GDP per capita rates or total population data. I found 2010 PPP GDP per capita rates (in constant 2011 international dollars) for five entities--Aruba, Cayman Islands, Curacao, Djibouti, Sint Maarten (Dutch part)--on the UNData record viewer (United Nations). 33 entities (including Anguilla and British Virgin Islands) did not have readily available 2010 PPP GDP per capita rates, so I decided to remove these observations from the dataset. Of the remaining 153 entities, five entities--Curacao, Micronesia, Palestine, Sint Maarten, and Yemen--were missing total population data from 2010. I located this information online (from databases, such as Macrotrends and Population Pyramid) and imputed the values. Thus, the final dataset includes complete information about 153 entities. I decided to perform a complete case analysis since I could not find the missing information (waste generation rates, PPP GDP per capita rates) for certain entities online. This analysis therefore assumes that information is missing completely at random. It is worth mentioning that, if the data were in fact not missing completely at random, any models fit using this dataset could have biased coefficient estimates and standard errors.
+
+We made this decision to simplify the analysis and remove the hierarchical structure of the data (i.e., patients with multiple procedures). By only considering each patient's first procedure, we can treat the observations independently (i.e., independence assumption satisfied).
+
 Questions
 - model -> EDA plots suggest log-transformation of response but then beta regression no longer suitable
 - so, should I do beta regression or linear regression on the log-transformed proportions?
 - what about coastal population proportion: seemingly no relationship -> can I still consider it as a covariate of interest?
 - missing data approach: missing completely at random, complete case analysis
+- need info about response to continue
 
 conduct a complete case analysis (first exclude non-countries, then exclude countries without full information - Kosovo, Timor (island; East Timor - sovereign, West Timor part of Indonesia) excluded for lack of population data)
 - response variable is created from mismanaged and total plastic waste
@@ -169,6 +200,12 @@ beta regression! - not a GLM
 - no error term
 
 - interpretations: linear predictor of logit of conditional expectation
+
+Holding all ..., for a $1000 increase in per capita GDP, we expect the log-odds of a country mismanaging plastic waste (compared to properly managing plastic waste) to increase by beta_1.
+
+zero-inflated model: interpreting only (0,1) component -> interpretation is the same
+-> more accurate coefficient estimates that account for the bounds of the proportions (particularly, the lower bound of 0)
+
 - why use logit link? - interpretability
 - interactions -> no because interpreting quantitative-quantitative interactions is difficult, not aligned with objective
 
@@ -186,28 +223,42 @@ where $i$ is the index for the patient (ranging from 1 to 21,180), $T_i$ is the 
 
 # Results
 
-The regression coefficients were estimated using the `betareg()` function in R. Table 2 displays the coefficient estimates, as well as the corresponding 95% confidence intervals and p-values for the final model.
+The regression coefficients were estimated using the `gamlss()` function in R. Table 1 displays the coefficient estimates, as well as the corresponding 95% confidence intervals and p-values for the final model.
 
 ```{r}
-bm1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP`, data = plastic2)
+bm1 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP (in thousands)`, data = plastic2)
 
-bm2 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
+bm2 <- betareg(`Mismanaged Waste Proportion` ~ `Per Capita GDP (in thousands)` + `Coastal Population Proportion`, data = plastic2)
 
-lm1 <- lm(log(`Mismanaged Waste Proportion`) ~ `Per Capita GDP`, data = plastic2)
+lm1 <- lm(`Mismanaged Waste Proportion` ~ log(`Per Capita GDP (in thousands)`), data = plastic2)
+# mixture component at zero and at one - all assumptions for parametric regression models 
 
-lm2 <- lm(log(`Mismanaged Waste Proportion`) ~ `Per Capita GDP` + `Coastal Population Proportion`, data = plastic2)
-
-summary(bm1)
-summary(bm2)
-summary(lm1)
-summary(lm2)
+lm2 <- lm(log(`Mismanaged Waste Proportion`) ~ `Per Capita GDP (in thousands)` + `Coastal Population Proportion`, data = plastic2)
 ```
 
-```{r include = T}
+```{r}
+zinfb1 <- gamlss(`Mismanaged Waste Proportion` ~ `Per Capita GDP (in thousands)` + `Coastal Population Proportion`, family = BEZI, data = plastic2, trace = F)
+```
+
+
+```{r}
+plot(bm1)
+plot(bm2)
+plot(lm1)
+plot(lm2)
+```
+
+```{r}
+plot(zinfb1)
+```
+
+
+
+```{r}
 final_output <- clean_names(as.data.frame(summary(bm2)[["coefficients"]][["mean"]])) %>%
   mutate(conf_int_lower = (estimate - (1.96*std_error)),
          conf_int_upper = (estimate + (1.96*std_error))) %>%
-  select(estimate, conf_int_lower, conf_int_upper, pr_z) %>%
+  dplyr::select(estimate, conf_int_lower, conf_int_upper, pr_z) %>%
   mutate(p = if_else(pr_z < 0.01, 0.00, pr_z),
          p = ceiling(p * 10000) / 10000,
          p = as.character(p),
@@ -216,7 +267,31 @@ final_output <- clean_names(as.data.frame(summary(bm2)[["coefficients"]][["mean"
          "Lower Bound" = conf_int_lower,
          "Upper Bound" = conf_int_upper,
          "P-Value" = p) %>%
-  select(-pr_z)
+  dplyr::select(-pr_z)
+
+final_output %>%
+  kable(digits = 3, caption = "Final Model Coefficients and 95% Confidence Intervals")
+```
+
+```{r}
+final_output <- clean_names(as.data.frame(summary(zinfb1))) %>%
+  mutate(conf_int_lower = (estimate - (1.96 * std_error)),
+         conf_int_upper = (estimate + (1.96 * std_error))) %>%
+  dplyr::select(estimate, conf_int_lower, conf_int_upper, pr_t) %>%
+  mutate(p = if_else(pr_t < 0.01, 0.00, pr_t),
+         p = ceiling(p * 10000) / 10000,
+         p = as.character(p),
+         p = if_else(p == "0", "<0.01", p)) %>%
+  rename("Coefficient" = estimate,
+         "Lower Bound" = conf_int_lower,
+         "Upper Bound" = conf_int_upper,
+         "P-Value" = p) %>%
+  dplyr::select(-pr_t) %>%
+  slice(1:3)
+```
+
+```{r include = T}
+rownames(final_output) <- c("Intercept", "PPP GDP Per Capita (in thousands)", "Coastal Population Proportion")
 
 final_output %>%
   kable(digits = 3, caption = "Final Model Coefficients and 95% Confidence Intervals")
@@ -229,6 +304,8 @@ Holding the proportion of a country's total population that lives within 50 kilo
 ## Conclusions
 
 ## Limitations and Future Directions
+
+Additionally, as mentioned previously, assuming that the data is missing completely at random may be inappropriate, and MICE (multiple imputation via chained equations) or other missing data approaches (which presuppose a different missingness mechanism) could be more suitable than the complete case analysis described here.
 
 ## Summary
 
@@ -250,3 +327,4 @@ Holding the proportion of a country's total population that lives within 50 kilo
 
 7) Thomas Mock (2019). Tidy Tuesday: A weekly data project aimed at the R ecosystem. https://github.com/rfordatascience/tidytuesday/tree/master/data/2019/2019-05-21.
 
+8) United Nations. (n.d.). Undata | record view | GDP per capita, PPP (constant 2011 international $). United Nations. Retrieved December 15, 2022, from https://data.un.org/Data.aspx?d=WDI&amp;f=Indicator_Code%3ANY.GDP.PCAP.PP.KD 
