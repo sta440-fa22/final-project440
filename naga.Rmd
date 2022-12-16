@@ -116,34 +116,28 @@ In this analysis, the response variable is the proportion of plastic waste that 
 
 ## Hypotheses
 
-I hypothesize that, as PPP GDP per capita increases (i.e., for richer entities), the log-odds of an entity mismanaging its daily per capita plastic waste (compared to properly managing its daily per capita plastic waste) is expected to decrease (after controlling for the entity's coastal population). Additionally, I hypothesize that, as the relative size of an entity's coastal population (i.e., proportion of total population living within 50 kilometers of a coastline) increases, the log-odds of an entity mismanaging its daily per capita plastic waste (compared to properly managing its daily per capita plastic waste) is expected to increase (after controlling for the entity's PPP GDP per capita).
+I hypothesize that, as PPP GDP per capita increases (i.e., for richer entities), the log-odds of an entity mismanaging its daily plastic waste (compared to properly managing its daily plastic waste) is expected to decrease (after controlling for the entity's coastal population). Additionally, I hypothesize that, as the relative size of an entity's coastal population (i.e., proportion of total population living within 50 kilometers of a coastline) increases, the log-odds of an entity mismanaging its daily plastic waste (compared to properly managing its daily plastic waste) is expected to increase (after controlling for the entity's PPP GDP per capita).
 
 
 ## Exploratory Data Analysis
 
 ```{r}
-p1 <- ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP (thousands of international $)`, y = `Mismanaged Waste Proportion`)) +
+p1 <- ggplot(data = plastic2, mapping = aes(x = `Per Capita GDP (thousands of international $)`, y = qlogis(`Mismanaged Waste Proportion`))) +
   geom_point() +
-  labs(x = "PPP GDP Per Capita (thousands of constant 2011 international $)", y = "Mismanaged Waste Proportion", title = "Response vs. PPP GDP Per Capita")
+  labs(x = "PPP GDP Per Capita (thousands of constant 2011 international $)", y = "Logit(Mismanaged Proportion)", title = "Logit(Response) vs. PPP GDP Per Capita")
 ```
 
 ```{r}
-p2 <- ggplot(data = plastic2, mapping = aes(x = `Coastal Population Proportion`, y = `Mismanaged Waste Proportion`)) +
+p2 <- ggplot(data = plastic2, mapping = aes(x = `Coastal Population Proportion`, y = qlogis(`Mismanaged Waste Proportion`))) +
   geom_point() +
-  labs(x = "Coastal Population Proportion", y = "Mismanaged Waste Proportion", title = "Response vs. Coastal Population Proportion")
+  labs(x = "Coastal Population Proportion", y = "Logit(Mismanaged Proportion)", title = "Logit(Response) vs. Coastal Population Proportion")
 ```
 
-```{r include = T, fig.cap = "Top: The Relationship Between PPP GDP Per Capita and Mismanaged Plastic Waste Proportion; Bottom: The Relationship Between Coastal Population Proportion and Mismanaged Plastic Waste Proportion"}
+```{r include = T, fig.cap = "Top: The Relationship Between PPP GDP Per Capita and the Log-Odds of Mismanaging Daily Plastic Waste; Bottom: The Relationship Between Coastal Population Proportion and the Log-Odds of Mismanaging Daily Plastic Waste"}
 p1 / p2
 ```
 
-
-
-# log-transform per capita GDP -> varying orders of magnitude
-# mixture model - discrete mass near zero and then continuous mass elsewhere - would be more -> try zero-inflated beta regression?
-
-
-strong regional dominance in global mismanaged coastal waste in Asia (especially India)
+Preliminary exploratory data analysis can be used to visually assess the hypotheses. Figure 1, in particular, shows a generally negative association between the log-odds of mismanaging daily plastic waste and PPP GDP per capita. This appears to agree with my initial hypothesis. Figure 1 illustrates how the log-odds of mismanaging daily plastic waste varies among the three types of entities (low-GDP, middle-GDP, and high-GDP). Figure 2, on the other hand, does not provide strong evidence of an association between the log-odds of mismanaging daily plastic waste and the relative size of an entity's coastal population. This appears to disagree with my initial hypothesis. Additionally, there appears to be a strong regional dominance in global mismanaged plastic waste as each of the top five entities (in terms of the proportion of mismanaged plastic waste) are located in Asia (see Appendix A).
 
 # Methodology
 
@@ -156,21 +150,10 @@ We made this decision to simplify the analysis and remove the hierarchical struc
 Modification for coastal population proportion > 1: capped at 1
 # when coastal population > total population, we consider the entire population to be coastal (islands) -> every point in a country might be less than 50 km from a coastline
 
+# mixture model - discrete mass near zero and then continuous mass elsewhere - would be more -> try zero-inflated beta regression?
+
 
 Questions
-- model -> EDA plots suggest log-transformation of response but then beta regression no longer suitable
-- so, should I do beta regression or linear regression on the log-transformed proportions?
-- what about coastal population proportion: seemingly no relationship -> can I still consider it as a covariate of interest?
-- missing data approach: missing completely at random, complete case analysis
-- need info about response to continue
-
-conduct a complete case analysis (first exclude non-countries, then exclude countries without full information - Kosovo, Timor (island; East Timor - sovereign, West Timor part of Indonesia) excluded for lack of population data)
-- response variable is created from mismanaged and total plastic waste
-- per capita GDP (based on 2011 international rates) and proportion of country's coastal population to total population (reported by Gapminder) are covariates of interest
-
--> only consider 2010 since that's when plastic waste data is available
--> create response variable: Per Capita Mismanaged Waste (Per Day) / Per Capita Waste (Per Day)
--> create second covariate: Coastal Population / Total Population
 
 -> tried to manually adjust total population for countries whose coastal population > total population, but found that the issue persisted for some countries
 - issues with data collection of coastal population (how is it collected?)
@@ -260,7 +243,7 @@ plastic2 %>%
   arrange(desc(`Mismanaged Waste Proportion`)) %>%
   slice(1:5) %>%
   dplyr::select(Entity, `Mismanaged Waste Proportion`) %>%
-  kable(caption = "Entities with Highest Mismanaged Plastic Waste Proportion")
+  kable(caption = "Entities with Highest Proportion of Mismanaged Plastic Waste")
 ```
 
 ## Appendix B
