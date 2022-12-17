@@ -136,7 +136,7 @@ p2 <- ggplot(data = plastic2, mapping = aes(x = `Coastal Population Proportion`,
 p1 / p2
 ```
 
-Preliminary exploratory data analysis can be used to visually assess the hypotheses. Figure 1 (Top), in particular, shows a generally negative association between the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) in 2010 and 2010 PPP GDP per capita. This appears to agree with my initial hypothesis. Figure 1 (Top) illustrates how the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) varies among the three types of entities (low-GDP, middle-GDP, and high-GDP). Figure 1 (Bottom), on the other hand, does not provide strong evidence of an association between the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) in 2010 and the relative size of an entity's 2010 coastal population. This appears to disagree with my initial hypothesis. Additionally, there appears to be a strong regional dominance in global mismanaged plastic waste as the top five entities (in terms of the proportion of mismanaged plastic waste) are located in Asia (see Appendix A).
+Preliminary exploratory data analysis can be used to visually assess the hypotheses. Figure 1 (Top), in particular, shows a generally negative association between the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) in 2010 and 2010 PPP GDP per capita. This appears to agree with my initial hypothesis. Figure 1 (Top) illustrates how the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) varies among the three types of entities (low-GDP, middle-GDP, and high-GDP). Figure 1 (Bottom), on the other hand, does not provide strong evidence of an association between the log-odds of mismanaging daily plastic waste (compared to properly managing daily plastic waste) in 2010 and the relative size of an entity's 2010 coastal population. This appears to disagree with my initial hypothesis. Additionally, there appears to be a strong regional dominance in the proportion of daily mismanaged plastic waste as the top five entities are located in Asia (see Appendix A).
 
 # Methodology
 
@@ -251,19 +251,19 @@ This analysis reaffirmed the prevailing theory in the literature that wealthier 
 
 # Appendices
 
-## Appendix A
+## Appendix A: Asian Dominance in Daily Mismanaged Plastic Waste Proportions 
 
 ```{r include = T}
 plastic2 %>%
   arrange(desc(`Mismanaged Waste Proportion`)) %>%
   slice(1:5) %>%
   dplyr::select(Entity, `Mismanaged Waste Proportion`) %>%
-  kable(caption = "Entities with Highest Proportion of Mismanaged Plastic Waste")
+  kable(caption = "Entities with Highest Proportions of Daily Mismanaged Plastic Waste")
 ```
 
-## Appendix B
+## Appendix B: Model Assumptions
 
-```{r include = T, fig.cap = "Assessing the Linearity Assumption"}
+```{r include = T, fig.cap = "Assessing the Linearity Assumption for the Final Model"}
 plot(bm1, which = 4, sub.caption = "")
 ```
 
